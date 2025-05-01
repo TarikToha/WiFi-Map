@@ -1,0 +1,47 @@
+# ========== Gradle ==========
+.gradle/
+**/build/
+!gradle-wrapper.jar
+gradle-app.setting
+
+# Local configuration
+local.properties
+
+# ========== Android Studio / IntelliJ ==========
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ========== Signing Keys / Secrets ==========
+*.jks
+*.keystore
+*.pem
+*.p12
+*.key
+*.crt
+.env
+*.env.*
+
+# ========== OS / System Files ==========
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.swp
+
+# ========== Logs / Reports ==========
+*.log
+*.stacktrace
+
+# ========== ProGuard ==========
+proguard/
+
+# ========== Capture / Output Folders ==========
+captures/
+outputs/
+
+# ========== Misc ==========
+*.orig
+*.rej
