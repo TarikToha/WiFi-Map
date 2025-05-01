@@ -1,4 +1,4 @@
-# RSSI Heatmap Logger
+# WiFi Map
 
 ![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)
 

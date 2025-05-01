@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RSSI App"
+rootProject.name = "WiFi Map"
 include(":app")
