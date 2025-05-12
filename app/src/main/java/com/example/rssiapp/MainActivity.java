@@ -6,6 +6,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.location.Location;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -15,6 +16,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,6 +37,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
+import com.google.maps.android.heatmaps.Gradient;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.google.maps.android.heatmaps.WeightedLatLng;
 
@@ -44,48 +50,96 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * MainActivity for RSSI-based Heatmap App.
- * - Captures RSSI values from the currently connected WiFi network.
- * - Logs geographic location and signal strength.
- * - Visualizes data on a live-updating Google Maps heatmap.
- * - Periodically saves logs as a CSV file to Downloads.
- */
 public class MainActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private static final int LOCATION_PERMISSION_REQUEST = 100;
-    private static final int UPDATE_INTERVAL_MS = 5000;
-    private final List<WeightedLatLng> heatmapData = new ArrayList<>();
+    private static final int UPDATE_INTERVAL_MS = 3000;
+
     private GoogleMap mMap;
     private WifiManager wifiManager;
     private FusedLocationProviderClient fusedLocationClient;
     private Handler handler;
+
+    private EditText ssidInput;
+    private Button startLoggingButton, resetButton;
+    private LinearLayout inputPanel;
     private TextView statusTextView;
+    private View mapContainer;
+
+    private String manualSsid = null;
+    private boolean isLogging = false;
+
+    private final List<WeightedLatLng> heatmapData = new ArrayList<>();
     private HeatmapTileProvider heatmapProvider;
     private TileOverlay heatmapOverlay;
-
-    private final Runnable updateRunnable = new Runnable() {
-        @RequiresApi(api = Build.VERSION_CODES.Q)
-        @Override
-        public void run() {
-            updateLocationAndHeatmap();
-            handler.postDelayed(this, UPDATE_INTERVAL_MS);
-        }
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        ssidInput = findViewById(R.id.ssidInput);
+        startLoggingButton = findViewById(R.id.startLoggingButton);
+        resetButton = findViewById(R.id.resetButton);
+        inputPanel = findViewById(R.id.inputPanel);
         statusTextView = findViewById(R.id.statusTextView);
+        mapContainer = findViewById(R.id.mapContainer);
+
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         handler = new Handler(Looper.getMainLooper());
 
-        SupportMapFragment mapFragment = (SupportMapFragment)
-                getSupportFragmentManager().findFragmentById(R.id.map);
-        if (mapFragment != null) mapFragment.getMapAsync(this);
+        mapContainer.setVisibility(View.GONE);
+
+        startLoggingButton.setOnClickListener(v -> {
+            String input = ssidInput.getText().toString().trim();
+            if (!input.isEmpty()) {
+                manualSsid = input.replace("\"", "");
+
+                WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+                String connectedSsid = wifiInfo.getSSID().replace("\"", "");
+
+                if (!manualSsid.equals(connectedSsid)) {
+                    Toast.makeText(this, "You're connected to \"" + connectedSsid + "\". Please connect to \"" + manualSsid + "\"", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                isLogging = true;
+                inputPanel.setVisibility(View.GONE);
+                mapContainer.setVisibility(View.VISIBLE);
+                resetButton.setVisibility(View.VISIBLE);
+
+                SupportMapFragment mapFragment = (SupportMapFragment)
+                        getSupportFragmentManager().findFragmentById(R.id.map);
+                if (mapFragment != null) mapFragment.getMapAsync(this);
+
+                Toast.makeText(this, "Logging started for SSID: " + manualSsid, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Please enter a valid SSID", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        resetButton.setOnClickListener(v -> {
+            isLogging = false;
+            manualSsid = null;
+            heatmapData.clear();
+
+            if (heatmapProvider != null) {
+                heatmapProvider.setWeightedData(new ArrayList<>());
+                if (heatmapOverlay != null) heatmapOverlay.clearTileCache();
+            }
+
+            if (mMap != null) {
+                LatLng defaultCenter = new LatLng(23.7808875, 90.2792371);
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultCenter, 15f));
+            }
+
+            ssidInput.setText("");
+            inputPanel.setVisibility(View.VISIBLE);
+            resetButton.setVisibility(View.GONE);
+            mapContainer.setVisibility(View.GONE);
+            statusTextView.setText("Reset complete. Enter SSID to begin.");
+        });
     }
 
     @Override
@@ -95,8 +149,7 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    LOCATION_PERMISSION_REQUEST);
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST);
             return;
         }
 
@@ -108,6 +161,15 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
         handler.post(updateRunnable);
     }
 
+    private final Runnable updateRunnable = new Runnable() {
+        @RequiresApi(api = Build.VERSION_CODES.Q)
+        @Override
+        public void run() {
+            updateLocationAndHeatmap();
+            handler.postDelayed(this, UPDATE_INTERVAL_MS);
+        }
+    };
+
     @RequiresApi(api = Build.VERSION_CODES.Q)
     private void updateLocationAndHeatmap() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
@@ -117,11 +179,17 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
             if (location == null) return;
 
             WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-            String ssid = wifiInfo.getSSID().replace("\"", "");
+            String connectedSsid = wifiInfo.getSSID().replace("\"", "");
+            if (!connectedSsid.equals(manualSsid)) {
+                statusTextView.setText("Connected to SSID: " + connectedSsid + " — expected: " + manualSsid);
+                return;
+            }
+
+            String ssid = manualSsid;
             int rssi = wifiInfo.getRssi();
+            float normalizedRssi = Math.min(1f, Math.max(0f, (rssi + 100f) / 70f));
 
             LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-            float normalizedRssi = Math.max(0f, 100 + rssi);
             heatmapData.add(new WeightedLatLng(latLng, normalizedRssi));
             drawOrUpdateHeatmap();
 
@@ -133,10 +201,8 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
                     "Updated at: " + time;
             statusTextView.setText(status);
 
-            saveCSVToDownloadsFolder(ssid, rssi, latLng, time);
-
-            if (heatmapData.size() == 1) {
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 17f));
+            if (isLogging) {
+                saveCSVToDownloadsFolder(ssid, rssi, latLng, time);
             }
         });
     }
@@ -156,8 +222,6 @@ public class MainActivity extends FragmentActivity implements OnMapReadyCallback
 
     @RequiresApi(api = Build.VERSION_CODES.Q)
     private void saveCSVToDownloadsFolder(String ssid, int rssi, LatLng latLng, String time) {
-        if (ssid == null || ssid.isEmpty()) return;
-
         String safeSsid = ssid.replaceAll("[^a-zA-Z0-9_-]", "_");
         String fileName = safeSsid + ".csv";
 

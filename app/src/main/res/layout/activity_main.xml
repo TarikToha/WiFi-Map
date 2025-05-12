@@ -1,23 +1,65 @@
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:orientation="vertical">
 
-    <!-- Embedded Google Map fragment for real-time heatmap display -->
-    <fragment
-        android:id="@+id/map"
-        android:name="com.google.android.gms.maps.SupportMapFragment"
+    <!-- Input Panel (initially visible) -->
+    <LinearLayout
+        android:id="@+id/inputPanel"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="wrap_content"
+        android:background="#222222"
+        android:orientation="vertical"
+        android:padding="16dp">
 
-    <!-- Overlay status text for displaying RSSI and GPS info -->
+        <EditText
+            android:id="@+id/ssidInput"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@android:color/transparent"
+            android:hint="Enter SSID name"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#AAAAAA" />
+
+        <Button
+            android:id="@+id/startLoggingButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Start Logging" />
+
+        <Button
+            android:id="@+id/resetButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Reset"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Map Container (hidden at launch) -->
+    <FrameLayout
+        android:id="@+id/mapContainer"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone">
+
+        <fragment
+            android:id="@+id/map"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- Bottom Status View -->
     <TextView
         android:id="@+id/statusTextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
         android:background="#66000000"
         android:padding="12dp"
-        android:text="Waiting for update..."
+        android:text="Waiting for input..."
         android:textColor="#FFFFFF"
         android:textSize="15sp" />
-</FrameLayout>
+</LinearLayout>
